@@ -41,12 +41,28 @@ int print_error(char *err);
  *  BUILT-IN COMMANDS  *
  ************************/
 
+int pwd_cmd(int argc, char **argv);
 int exit_cmd(int argc, char **argv);
 
 const built_in_t built_ins[] = {
+    {.name = "pwd", .fn = pwd_cmd},
     {.name = "exit", .fn = exit_cmd},
     {.name = NULL, .fn = NULL},
 };
+
+int pwd_cmd(int argc, char **argv) {
+  char *wd = NULL;
+  size_t len;
+
+  if ((wd = getcwd(NULL, len)) == NULL) {
+    print_error(NULL);
+  }
+
+  printf("%s\n", wd);
+  free(wd);
+
+  return 0;
+}
 
 int exit_cmd(int argc, char **argv) {
   if (argc > 1) {
@@ -182,8 +198,8 @@ int print_error(char *err) {
 }
 
 /***********************
- *   MAIN FUNCTION    *
- ************************/
+ *    MAIN FUNCTION    *
+ ***********************/
 
 int main(int argc, char **argv) {
   char *token;
