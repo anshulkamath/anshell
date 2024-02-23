@@ -41,9 +41,26 @@ int print_error(char *err);
  *  BUILT-IN COMMANDS  *
  ************************/
 
+int exit_cmd(int argc, char **argv);
+
 const built_in_t built_ins[] = {
+    {.name = "exit", .fn = exit_cmd},
     {.name = NULL, .fn = NULL},
 };
+
+int exit_cmd(int argc, char **argv) {
+  if (argc > 1) {
+    print_error("an error occurred.");
+    return 1;
+  }
+
+  exit(0);
+  return 0;
+}
+
+/***********************
+ *   IMPLEMENTATIONS   *
+ ***********************/
 
 void initialize_environment() {
   char *cwd = getcwd(NULL, 0);
@@ -164,6 +181,10 @@ int print_error(char *err) {
   return 1;
 }
 
+/***********************
+ *   MAIN FUNCTION    *
+ ************************/
+
 int main(int argc, char **argv) {
   char *token;
 
@@ -171,7 +192,6 @@ int main(int argc, char **argv) {
 
   if (argc > 2) {
     return print_error("an error occurred.");
-    ;
   }
 
   while (1) {
