@@ -14,6 +14,7 @@
  *  GLOBAL VARIABLES   *
  ************************/
 char HOME[MAX_PATH_LEN] = {0};
+char PATH[MAX_PATH_LEN] = "/bin";
 
 /***********************
  *  TYPE DEFINITIONS   *
@@ -35,6 +36,7 @@ int read_and_process_command(FILE *f);
 int process_command(char *command);
 int parse_command(char **dest, size_t len, char *command);
 cmd get_command(char *str);
+int find_and_exec_command_in_path(int argc, char **argv);
 int print_error(char *err);
 
 /***********************
@@ -43,11 +45,13 @@ int print_error(char *err);
 
 int pwd_cmd(int argc, char **argv);
 int cd_cmd(int argc, char **argv);
+int path_cmd(int argc, char **argv);
 int exit_cmd(int argc, char **argv);
 
 const built_in_t built_ins[] = {
     {.name = "pwd", .fn = pwd_cmd},
     {.name = "cd", .fn = cd_cmd},
+    {.name = "path", .fn = path_cmd},
     {.name = "exit", .fn = exit_cmd},
     {.name = NULL, .fn = NULL},
 };
@@ -77,6 +81,21 @@ int cd_cmd(int argc, char **argv) {
   }
 
   chdir(argv[1]);
+  return 0;
+}
+
+int path_cmd(int argc, char **argv) {
+  memset(PATH, 0, MAX_PATH_LEN);
+  if (argc == 1) {
+    return 0;
+  }
+
+  strcat(PATH, argv[1]);
+  for (int i = 2; i < argc; i++) {
+    strcat(PATH, ":");
+    strcat(PATH, argv[i]);
+  }
+
   return 0;
 }
 
@@ -170,6 +189,10 @@ int process_command(char *command) {
 
   cmd fn = get_command(argv[0]);
   if (!fn) {
+    if (!find_and_exec_command_in_path(argc, argv)) {
+      return 1;
+    }
+    
     char err[MAX_STR_LEN] = "unknown command: ";
     strcat(err, argv[0]);
     return print_error(err);
@@ -205,6 +228,56 @@ cmd get_command(char *str) {
     }
   }
   return NULL;
+}
+
+int find_and_exec_command_in_path(int argc, char **argv) {
+  if (!strlen(PATH)) {
+    return 1;
+  }
+  
+  char *dir = strdup(PATH);
+  char *curr = strtok(dir, ":");
+  char bin_path[MAX_PATH_LEN] = {0};
+
+  // null-terminate for execv
+  argv[argc] = NULL;
+
+  do {
+    memset(bin_path, 0, MAX_PATH_LEN);
+    strcat(bin_path, curr);
+    strcat(bin_path, "/");
+    strcat(bin_path, argv[0]);
+
+    if (!access(bin_path, X_OK)) {
+      break;
+    }
+  } while ((curr = strtok(NULL, ":")));
+
+  if (curr == NULL) {
+    free(dir);
+    return 1;
+  }
+
+  pid_t child_pid = fork();
+  if (child_pid < 0) {
+    print_error("an error occurred");
+    exit(1);
+  } else if (!child_pid && execv(bin_path, argv)) {
+    exit(EXIT_FAILURE);
+  }
+
+  int status;
+  pid_t ret;
+  if ((ret = wait(NULL))) {
+    if (ret < 0) {
+      exit(1);
+    }
+
+    fprintf(stdin, "process %d was terminated or killed\n", ret);
+  }
+
+  free(dir);
+  return 0;
 }
 
 int print_error(char *err) {
