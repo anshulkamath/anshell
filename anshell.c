@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,7 @@ int process_command(char *command);
 int parse_command(char **dest, size_t len, char *command);
 cmd get_command(char *str);
 int find_and_exec_command_in_path(int argc, char **argv);
+int process_concurrent_commands(char *command);
 int print_error(char *err);
 
 /***********************
@@ -53,12 +55,14 @@ int path_cmd(int argc, char **argv);
 int history_cmd(int argc, char **argv);
 void log_history(char *command, char *full_command);
 char *check_history(char *command);
+int kill_cmd(int argc, char **argv);
 int exit_cmd(int argc, char **argv);
 
 const built_in_t built_ins[] = {
     {.name = "pwd", .fn = pwd_cmd},   {.name = "cd", .fn = cd_cmd},
     {.name = "path", .fn = path_cmd}, {.name = "history", .fn = history_cmd},
-    {.name = "exit", .fn = exit_cmd}, {.name = NULL, .fn = NULL},
+    {.name = "exit", .fn = exit_cmd}, {.name = "kill", .fn = kill_cmd},
+    {.name = NULL, .fn = NULL},
 };
 
 int pwd_cmd(int argc, char **argv) {
@@ -153,6 +157,19 @@ char *check_history(char *command) {
   return HISTORY[idx];
 }
 
+int kill_cmd(int argc, char **argv) {
+  if (argc != 2) {
+    print_error("an error has occurred");
+  }
+
+  pid_t pid = atoi(argv[1]);
+  if (pid < 0) {
+    print_error("unable to parse pid");
+  }
+
+  return kill(pid, SIGTERM);
+}
+
 int exit_cmd(int argc, char **argv) {
   if (argc > 1) {
     print_error("an error occurred.");
@@ -206,6 +223,10 @@ int read_and_process_command(FILE *f) {
 
   if (!(command = read_command(stdin))) {
     return 1;
+  }
+
+  if (strchr(command, '&')) {
+    return process_concurrent_commands(command);
   }
 
   return process_command(command);
@@ -338,6 +359,27 @@ int find_and_exec_command_in_path(int argc, char **argv) {
   }
 
   free(dir);
+  return 0;
+}
+
+int process_concurrent_commands(char *command) {
+  char *subcommand;
+  subcommand = strtok(command, "&\n");
+  do {
+    pid_t child = fork();
+    if (child < 0) {
+      print_error("error occurred");
+      return 1;
+    } else if (!child) {
+      process_command(subcommand);
+      exit(0);
+    }
+
+    char *buff = malloc(strlen(subcommand));
+    sscanf(subcommand, "%s", buff);
+    printf("[PID %d]: started `%s`\n", child, buff);
+    free(buff);
+  } while ((subcommand = strtok(NULL, "&\n")));
   return 0;
 }
 
