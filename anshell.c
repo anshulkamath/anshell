@@ -42,10 +42,12 @@ int print_error(char *err);
  ************************/
 
 int pwd_cmd(int argc, char **argv);
+int cd_cmd(int argc, char **argv);
 int exit_cmd(int argc, char **argv);
 
 const built_in_t built_ins[] = {
     {.name = "pwd", .fn = pwd_cmd},
+    {.name = "cd", .fn = cd_cmd},
     {.name = "exit", .fn = exit_cmd},
     {.name = NULL, .fn = NULL},
 };
@@ -64,6 +66,20 @@ int pwd_cmd(int argc, char **argv) {
   return 0;
 }
 
+int cd_cmd(int argc, char **argv) {
+  if (argc >= 3) {
+    print_error("error: cd has too many arguments");
+  }
+
+  if (argc == 1) {
+    chdir(HOME);
+    return 0;
+  }
+
+  chdir(argv[1]);
+  return 0;
+}
+
 int exit_cmd(int argc, char **argv) {
   if (argc > 1) {
     print_error("an error occurred.");
@@ -71,7 +87,6 @@ int exit_cmd(int argc, char **argv) {
   }
 
   exit(0);
-  return 0;
 }
 
 /***********************
