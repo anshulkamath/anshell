@@ -9,12 +9,16 @@
 #define MAX_ARG_LEN 20
 #define MAX_PATH_LEN 4096
 #define MAX_STR_LEN 256
+#define MAX_SCROLLBACK 20
 
 /***********************
  *  GLOBAL VARIABLES   *
  ************************/
 char HOME[MAX_PATH_LEN] = {0};
 char PATH[MAX_PATH_LEN] = "/bin";
+
+char HISTORY[MAX_SCROLLBACK][MAX_CMD_LEN] = {0};
+int HISTORY_IDX = 0;
 
 /***********************
  *  TYPE DEFINITIONS   *
@@ -46,14 +50,15 @@ int print_error(char *err);
 int pwd_cmd(int argc, char **argv);
 int cd_cmd(int argc, char **argv);
 int path_cmd(int argc, char **argv);
+int history_cmd(int argc, char **argv);
+void log_history(char *command, char *full_command);
+char *check_history(char *command);
 int exit_cmd(int argc, char **argv);
 
 const built_in_t built_ins[] = {
-    {.name = "pwd", .fn = pwd_cmd},
-    {.name = "cd", .fn = cd_cmd},
-    {.name = "path", .fn = path_cmd},
-    {.name = "exit", .fn = exit_cmd},
-    {.name = NULL, .fn = NULL},
+    {.name = "pwd", .fn = pwd_cmd},   {.name = "cd", .fn = cd_cmd},
+    {.name = "path", .fn = path_cmd}, {.name = "history", .fn = history_cmd},
+    {.name = "exit", .fn = exit_cmd}, {.name = NULL, .fn = NULL},
 };
 
 int pwd_cmd(int argc, char **argv) {
@@ -97,6 +102,55 @@ int path_cmd(int argc, char **argv) {
   }
 
   return 0;
+}
+
+int history_cmd(int argc, char **argv) {
+  int start = 0;
+  if (HISTORY_IDX > MAX_SCROLLBACK) {
+    start = HISTORY_IDX % MAX_SCROLLBACK;
+  }
+
+  for (int i = 0; i < MAX_SCROLLBACK; i++) {
+    int idx = (start + i) % MAX_SCROLLBACK;
+    if (idx >= HISTORY_IDX) {
+      break;
+    }
+    printf("%d\t%s\n", i, HISTORY[idx]);
+  }
+  return 0;
+}
+
+void log_history(char *command, char *full_command) {
+  // if the command is not a history command, then log it
+  if (strcmp(command, "history")) {
+    memcpy(&HISTORY[HISTORY_IDX % MAX_SCROLLBACK], full_command, MAX_CMD_LEN);
+    HISTORY_IDX++;
+  }
+}
+
+char *check_history(char *command) {
+  if (strlen(command) == 0) {
+    return NULL;
+  }
+
+  if (command[0] != '!') {
+    return NULL;
+  }
+
+  int command_no = atoi(command + 1);
+  if (command_no >= MAX_SCROLLBACK) {
+    print_error("history out of bounds");
+  }
+
+  int start = HISTORY_IDX + 1;
+  if (start < MAX_SCROLLBACK) {
+    start = 0;
+  } else {
+    start %= MAX_SCROLLBACK;
+  }
+
+  int idx = (start + command_no) % MAX_SCROLLBACK;
+  return HISTORY[idx];
 }
 
 int exit_cmd(int argc, char **argv) {
@@ -176,6 +230,11 @@ int process_command(char *command) {
   int argc;
   char *argv[MAX_ARG_LEN];
 
+  char *history_command;
+  if ((history_command = check_history(command))) {
+    return process_command(history_command);
+  }
+
   // copy the command, but get rid of the newline token
   char command_copy[MAX_CMD_LEN];
   memcpy(command_copy, command, MAX_CMD_LEN);
@@ -190,14 +249,16 @@ int process_command(char *command) {
   cmd fn = get_command(argv[0]);
   if (!fn) {
     if (!find_and_exec_command_in_path(argc, argv)) {
+      log_history(argv[0], command_copy);
       return 1;
     }
-    
+
     char err[MAX_STR_LEN] = "unknown command: ";
     strcat(err, argv[0]);
     return print_error(err);
   }
 
+  log_history(argv[0], command_copy);
   return (*fn)(argc, argv);
 }
 
