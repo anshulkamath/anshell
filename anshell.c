@@ -42,7 +42,9 @@ int process_command(char *command);
 int parse_command(char **dest, size_t len, char *command);
 cmd get_command(char *str);
 int find_and_exec_command_in_path(int argc, char **argv);
+int fork_and_process_command(char *command);
 int process_concurrent_commands(char *command);
+int parse_file_descriptors(char *command);
 int print_error(char *err);
 
 /***********************
@@ -229,6 +231,10 @@ int read_and_process_command(FILE *f) {
     return process_concurrent_commands(command);
   }
 
+  if (strchr(command, '<') || strchr(command, '>')) {
+    return fork_and_process_command(command);
+  }
+
   return process_command(command);
 }
 
@@ -255,6 +261,8 @@ int process_command(char *command) {
   if ((history_command = check_history(command))) {
     return process_command(history_command);
   }
+
+  parse_file_descriptors(command);
 
   // copy the command, but get rid of the newline token
   char command_copy[MAX_CMD_LEN];
@@ -310,6 +318,19 @@ cmd get_command(char *str) {
     }
   }
   return NULL;
+}
+
+int fork_and_process_command(char *command) {
+  pid_t pid = fork();
+  if (pid < 0) {
+    print_error(NULL);
+  } else if (pid) {
+    int status;
+    wait(&status);
+    return status;
+  }
+
+  exit(process_command(command));
 }
 
 int find_and_exec_command_in_path(int argc, char **argv) {
@@ -380,6 +401,36 @@ int process_concurrent_commands(char *command) {
     printf("[PID %d]: started `%s`\n", child, buff);
     free(buff);
   } while ((subcommand = strtok(NULL, "&\n")));
+  return 0;
+}
+
+int parse_file_descriptors(char *command) {
+  char *p, *permissions;
+  int redirect_fd;
+
+  if ((p = strchr(command, '<'))) {
+    permissions = "r";
+    redirect_fd = STDIN_FILENO;
+  } else if ((p = strchr(command, '>'))) {
+    permissions = "w";
+    redirect_fd = STDOUT_FILENO;
+  } else {
+    return 0;
+  }
+  
+  ++p;
+
+  char redirect_file[MAX_CMD_LEN];
+  sscanf(p, "%s", redirect_file);
+  FILE *f = fopen(redirect_file, permissions);
+  if (!f) {
+    print_error(NULL);
+  }
+  dup2(fileno(f), redirect_fd);
+
+  // get rid of these tokens from the command for parsing
+  strtok(command, "<>");
+
   return 0;
 }
 
