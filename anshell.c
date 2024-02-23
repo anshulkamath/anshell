@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 // making some assumptions here because my brain doesn't wanna work that hard
+#define SHELL_NAME "anshell"
 #define MAX_CMD_LEN 120
 #define MAX_ARG_LEN 20
 #define MAX_PATH_LEN 4096
@@ -205,7 +206,7 @@ int read_file(char *fname) {
   size_t len;
   getline(&command, &len, f);
   while (!feof(f)) {
-    printf("anshell> %s", command);
+    printf(SHELL_NAME "> %s", command);
     process_command(command);
     command = NULL;
     getline(&command, &len, f);
@@ -221,7 +222,7 @@ int read_file(char *fname) {
 int read_and_process_command(FILE *f) {
   char *command = NULL;
   size_t cap, len;
-  printf("anshell> ");
+  printf(SHELL_NAME "> ");
 
   if (!(command = read_command(stdin))) {
     return 1;
